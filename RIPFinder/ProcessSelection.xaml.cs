@@ -1,17 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
+﻿using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
+using System.Runtime.InteropServices;
+using Avalonia.Controls;
+using Avalonia.Interactivity;
+using Avalonia.Markup.Xaml;
 
 namespace RIPFinder
 {
@@ -20,23 +13,43 @@ namespace RIPFinder
     /// </summary>
     public partial class ProcessSelection : Window
     {
+        public ListBox ListBox_Processes { get; }
         List<ProcessModel> ProcessList { get; set; }
         public Process SelectedProcess { get; set; }
         public ProcessSelection()
         {
             InitializeComponent();
-            ProcessList = new List<ProcessModel>();
-            var processes = Process.GetProcesses().Where(p => p.MainWindowTitle.Length != 0);
-            foreach (var process in processes)
+            ListBox_Processes = this.FindControl<ListBox>("ListBox_Processes");
+
+            var pp = Process.GetProcesses();
+            var ppp = pp.Select(p => p.MainWindowTitle).ToList();
+            var pp2 = pp.Where(p => p.ProcessName == "code").ToList();
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
-
-
-                ProcessList.Add(new ProcessModel
-                {
-                    Name = process.ProcessName,
-                    Process = process
-                });
+                // TODO: .net core do not support fetching window names for given PID
+                ProcessList = Process.GetProcesses()
+                                .Select(p => new ProcessModel
+                                {
+                                    Name = p.ProcessName,
+                                    Process = p
+                                })
+                                .OrderBy(p => p.Name)
+                                .ToList();
             }
+            else
+            {
+                ProcessList = Process.GetProcesses()
+                                .Where(p => p.MainWindowTitle.Length != 0)
+                                .Select(p => new ProcessModel
+                                {
+                                    Name = p.ProcessName,
+                                    Process = p
+                                })
+                                .OrderBy(p => p.Name)
+                                .ToList();
+            }
+            
             ListBox_Processes.DataContext = ProcessList;
         }
 
@@ -46,8 +59,13 @@ namespace RIPFinder
             {
                 var p = ListBox_Processes.SelectedItems[0] as ProcessModel;
                 this.SelectedProcess = p.Process;
-                DialogResult = true;
+                Close(true);
             }
+        }
+
+        private void InitializeComponent()
+        {
+            AvaloniaXamlLoader.Load(this);
         }
     }
 

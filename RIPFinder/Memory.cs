@@ -17,7 +17,7 @@ namespace RIPFinder
         public Memory(Process process)
         {
             this.process = process;
-            this.processHandle = Helper.OpenProcess((int)Helper.ProcessAccessFlags.PROCESS_VM_READ, false, process.Id);
+            this.processHandle = Helper.OpenProcess(process.Id);
         }
 
         public bool IsValid()

@@ -1,19 +1,17 @@
 ﻿<Window x:Class="RIPFinder.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:RIPFinder"
-        mc:Ignorable="d"
-        Title="RIPFinder" Height="550" Width="930">
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:local="clr-namespace:RIPFinder.Controls" mc:Ignorable="d" Title="RIPFinder" Height="550" Width="930">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="78"/>
             <RowDefinition />
         </Grid.RowDefinitions>
-        <TextBox x:Name="TextBox_ProcessName" HorizontalAlignment="Left" Height="23" Margin="85,10,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="200" IsReadOnly="True" TextChanged="TextBox_ProcessName_TextChanged" />
-        <Button x:Name="Button_SelectProcess" Content="Select Process" HorizontalAlignment="Left" Margin="301,10,0,0" VerticalAlignment="Top" Width="107" Height="23" Click="Button_SelectProcess_Click" IsEnabled="False"/>
-        <Button x:Name="Button_SaveDump" Content="Save Main Process Dump" Margin="0,10,10,0" VerticalAlignment="Top" HorizontalAlignment="Right" Width="162" Height="23" Click="Button_SaveDump_Click" IsEnabled="False"/>
+        <local:TextBoxEx x:Name="TextBox_ProcessName" HorizontalAlignment="Left" Height="23" Margin="85,10,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="200" IsReadOnly="True" />
+        <Button x:Name="Button_SelectProcess" Content="Select Process" HorizontalAlignment="Left" Margin="301,10,0,0" VerticalAlignment="Top" Width="107" Height="23" IsEnabled="False"/>
+        <Button x:Name="Button_SaveDump" Content="Save Main Process Dump" Margin="0,10,10,0" VerticalAlignment="Top" HorizontalAlignment="Right" Width="162" Height="23" IsEnabled="False"/>
         <TabControl x:Name="TabControl_Signatures" Margin="10,0,10,10" Grid.Row="1" IsEnabled="False">
             <TabItem Header="Signature Search">
                 <Grid>
@@ -22,12 +20,12 @@
                         <RowDefinition/>
                         <RowDefinition Height="126"/>
                     </Grid.RowDefinitions>
-                    <Label Content="Target Filter:" HorizontalAlignment="Left" Margin="5,10,0,0" VerticalAlignment="Top" Height="26" Width="79" />
-                    <TextBox x:Name="TextBox_FilterString" Height="58" Margin="84,10,10,0" AcceptsReturn="True" TextWrapping="Wrap" VerticalAlignment="Top"/>
-                    <CheckBox x:Name="CheckBox_AllModules" Content="Search From All Modules" Margin="199,78,0,0" VerticalAlignment="Top" Height="15" HorizontalAlignment="Left" Width="151"/>
-                    <Button x:Name="Button_ExportResults" Content="Export Results" Margin="0,73,10,0" HorizontalAlignment="Right" Width="125" Height="23" VerticalAlignment="Top" Click="Button_ExportResults_Click"/>
-                    <Button x:Name="Button_StartScan" Content="Start Scan" HorizontalAlignment="Left" Margin="84,73,0,0" VerticalAlignment="Top" Width="98" Height="23" Click="Button_StartScan_Click"/>
-                    <DataGrid x:Name="DataGrid_RIP" Margin="10,0,10,10" AutoGenerateColumns="False" CanUserAddRows="False" FontFamily="Consolas" Grid.Row="1">
+                    <TextBlock Text="Target Filter:" HorizontalAlignment="Left" Margin="5,10,0,0" VerticalAlignment="Top" Height="26" Width="79" />
+                    <local:TextBoxEx x:Name="TextBox_FilterString" Height="58" Margin="84,10,10,0" AcceptsReturn="True" TextWrapping="Wrap" VerticalAlignment="Top"/>
+                    <CheckBox x:Name="CheckBox_AllModules" Content="Search From All Modules" Margin="199,78,0,0" VerticalAlignment="Top" HorizontalAlignment="Left" Width="151"/>
+                    <Button x:Name="Button_ExportResults" Content="Export Results" Margin="0,73,10,0" HorizontalAlignment="Right" Width="125" Height="23" VerticalAlignment="Top" />
+                    <Button x:Name="Button_StartScan" Content="Start Scan" HorizontalAlignment="Left" Margin="84,73,0,0" VerticalAlignment="Top" Width="98" Height="23" />
+                    <DataGrid x:Name="DataGrid_RIP" Margin="10,0,10,10" AutoGenerateColumns="False" Grid.Row="1">
                         <DataGrid.ContextMenu>
                             <ContextMenu>
                                 <MenuItem Header="Copy Base Address Relative" Click="DataGrid_RIP_CopyBaseRelativeAddressString" />
@@ -45,9 +43,19 @@
                             <DataGridTextColumn Header="Signature" Binding="{Binding Signature, Mode=OneWay}"/>
                         </DataGrid.Columns>
                     </DataGrid>
-                    <TextBox x:Name="TextBox_Log" Margin="10,0,10,10" TextWrapping="Wrap" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Grid.Row="2"/>
-                    <Label Content="Caution: Hex value must be UPPER CASE" HorizontalAlignment="Left" Margin="505,72,0,0" VerticalAlignment="Top" Height="26" Width="224"/>
-                    <CheckBox x:Name="CheckBox_OnlyLEA" Content="Only Ends in LEA" Margin="369,78,0,0" VerticalAlignment="Top" Height="14" HorizontalAlignment="Left" Width="151"/>
+                    <local:TextBoxEx x:Name="TextBox_Log" Margin="10,0,10,10" TextWrapping="Wrap" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto" Grid.Row="2"/>
+                    <TextBlock Text="Caution: Hex value must be UPPER CASE" Margin="0,78,175,0" HorizontalAlignment="Right" />
+                    <CheckBox x:Name="CheckBox_OnlyLEA" Content="Only Ends in LEA" Margin="369,78,0,0" VerticalAlignment="Top" HorizontalAlignment="Left" />
+                    <TextBlock Text="Select module: " HorizontalAlignment="Left" Margin="505,80,0,0" VerticalAlignment="Top" MinHeight="14" />
+                    <ComboBox x:Name="ComboBox_SpecificModule" Items="{Binding}" HorizontalAlignment="Left" Margin="610,78,0,0" VerticalAlignment="Top" MinHeight="18" Width="200">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid>
+                                    <TextBlock Text="{Binding ModuleName}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
                 </Grid>
             </TabItem>
             <TabItem Header="Signature Scan">
@@ -56,23 +64,33 @@
                         <RowDefinition Height="85"/>
                         <RowDefinition/>
                     </Grid.RowDefinitions>
-                    <Label Content="Signature:" HorizontalAlignment="Left" Margin="5,10,0,0" VerticalAlignment="Top" Width="70"/>
-                    <TextBox x:Name="TextBox_Signature" Height="23" Margin="75,14,122,0" TextWrapping="Wrap" VerticalAlignment="Top"/>
-                    <Button x:Name="Button_SignatureScan" Content="Scan" Margin="0,14,10,0" VerticalAlignment="Top" Height="23" Click="Button_SignatureScan_Click" HorizontalAlignment="Right" Width="80"/>
-                    <Label Content="Offset:" HorizontalAlignment="Left" Margin="5,42,0,0" VerticalAlignment="Top" Width="60"/>
-                    <TextBox x:Name="TextBox_Offset1" HorizontalAlignment="Left" Height="23" Margin="75,46,0,0" TextWrapping="Wrap" Text="0" VerticalAlignment="Top" Width="60"/>
-                    <TextBox x:Name="TextBox_LogScan" Margin="10,0,10,10" Grid.Row="1" TextWrapping="Wrap" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" />
+                    <TextBlock Text="Signature:" HorizontalAlignment="Left" Margin="5,10,0,0" VerticalAlignment="Top" Width="70"/>
+                    <local:TextBoxEx x:Name="TextBox_Signature" Height="23" Margin="75,14,122,0" TextWrapping="Wrap" VerticalAlignment="Top"/>
+                    <Button x:Name="Button_SignatureScan" Content="Scan" Margin="0,14,10,0" VerticalAlignment="Top" Height="23" HorizontalAlignment="Right" Width="80"/>
+                    <TextBlock Text="Offset:" HorizontalAlignment="Left" Margin="5,42,0,0" VerticalAlignment="Top" Width="60"/>
+                    <local:TextBoxEx x:Name="TextBox_Offset1" HorizontalAlignment="Left" Height="23" Margin="75,46,0,0" TextWrapping="Wrap" Text="0" VerticalAlignment="Top" Width="60"/>
+                    <local:TextBoxEx x:Name="TextBox_LogScan" Margin="10,0,10,10" Grid.Row="1" TextWrapping="Wrap" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                    <TextBlock Text="Select module: " HorizontalAlignment="Left" Margin="150,46,0,0" VerticalAlignment="Top" MinHeight="14" />
+                    <ComboBox x:Name="ComboBox_ScanSpecificModule" Items="{Binding}" HorizontalAlignment="Left" Margin="255,46,0,0" VerticalAlignment="Top" MinHeight="18" Width="200">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid>
+                                    <TextBlock Text="{Binding ModuleName}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
                 </Grid>
             </TabItem>
-            <TabItem Header="Stack" HorizontalAlignment="Left" Height="20" VerticalAlignment="Top" Width="54">
+            <TabItem Header="Stack" HorizontalAlignment="Left" VerticalAlignment="Top">
                 <Grid >
-                    <TextBox x:Name="TextBox_Stack" Margin="10" TextWrapping="Wrap" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" FontFamily="Consolas"/>
+                    <local:TextBoxEx x:Name="TextBox_Stack" Margin="10" TextWrapping="Wrap" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto" />
                 </Grid>
             </TabItem>
         </TabControl>
         <RadioButton x:Name="RadioButton_Group1_Process" GroupName="group1" Content="Process" HorizontalAlignment="Left" Margin="10,15,0,0" VerticalAlignment="Top" Checked="RadioButton_Group1_Checked"/>
         <RadioButton x:Name="RadioButton_Group1_File" GroupName="group1" Content="File" HorizontalAlignment="Left" Margin="10,46,0,0" VerticalAlignment="Top" Checked="RadioButton_Group1_Checked" Width="59"/>
-        <TextBox x:Name="TextBox_BinFileName" HorizontalAlignment="Left" Height="23" Margin="85,41,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="200" IsReadOnly="true" TextChanged="TextBox_BinFileName_TextChanged" />
-        <Button x:Name="Button_SelectBinFile" Content="Select Bin File" HorizontalAlignment="Left" Margin="301,41,0,0" VerticalAlignment="Top" Width="107" Height="23" IsEnabled="False" Click="Button_SelectBinFile_Click" />
+        <local:TextBoxEx x:Name="TextBox_BinFileName" HorizontalAlignment="Left" Height="23" Margin="85,41,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="200" IsReadOnly="true" />
+        <Button x:Name="Button_SelectBinFile" Content="Select Bin File" HorizontalAlignment="Left" Margin="301,41,0,0" VerticalAlignment="Top" Width="107" Height="23" IsEnabled="False" />
     </Grid>
 </Window>

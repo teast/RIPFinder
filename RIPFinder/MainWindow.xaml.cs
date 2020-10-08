@@ -1,12 +1,15 @@
-﻿using Microsoft.Win32;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
+using Avalonia.Controls;
+using Avalonia.Interactivity;
+using Avalonia.Markup.Xaml;
+using RIPFinder.Controls;
+using RIPFinder.Dialogs;
+using RIPFinder.TextCopy;
 
 namespace RIPFinder
 {
@@ -18,6 +21,29 @@ namespace RIPFinder
         Process TargetProcess { get; set; }
         IntPtr TargetProcessHandle { get; set; }
         string BinFileName { get; set; }
+        public TextBoxEx TextBox_ProcessName { get; }
+        public DataGrid DataGrid_RIP { get; }
+        public TextBoxEx TextBox_Log { get; }
+        public TextBoxEx TextBox_Stack { get; }
+        public TextBoxEx TextBox_FilterString { get; }
+        public RadioButton RadioButton_Group1_Process { get; }
+        public RadioButton RadioButton_Group1_File { get; }
+        public TextBoxEx TextBox_BinFileName { get; }
+        public Button Button_SelectBinFile { get; }
+        public CheckBox CheckBox_AllModules { get; }
+        public CheckBox CheckBox_OnlyLEA { get; }
+        public TextBoxEx TextBox_LogScan { get; }
+        public TextBoxEx TextBox_Signature { get; }
+        public TextBoxEx TextBox_Offset1 { get; }
+        public Button Button_SelectProcess { get; }
+        public Dispatcher Dispatcher { get; }
+        public Button Button_SaveDump { get; }
+        public Button Button_StartScan { get; }
+        public Button Button_ExportResults { get; }
+        public Button Button_SignatureScan { get; }
+        public TabControl TabControl_Signatures { get; }
+        public ComboBox ComboBox_SpecificModule { get; }
+        public ComboBox ComboBox_ScanSpecificModule { get; }
 
         List<RIPEntry> entries = new List<RIPEntry>();
         const int MaxEntries = 1 * 1000 * 1000;
@@ -25,65 +51,110 @@ namespace RIPFinder
         public MainWindow()
         {
             InitializeComponent();
+
+            Dispatcher = new Dispatcher();
+            TextBox_ProcessName = this.FindControl<TextBoxEx>("TextBox_ProcessName");
+            DataGrid_RIP = this.FindControl<DataGrid>("DataGrid_RIP");
+            TextBox_Log = this.FindControl<TextBoxEx>("TextBox_Log");
+            TextBox_Stack = this.FindControl<TextBoxEx>("TextBox_Stack");
+            TextBox_FilterString = this.FindControl<TextBoxEx>("TextBox_FilterString");
+            RadioButton_Group1_Process = this.FindControl<RadioButton>("RadioButton_Group1_Process");
+            RadioButton_Group1_File = this.FindControl<RadioButton>("RadioButton_Group1_File");
+            TextBox_BinFileName = this.FindControl<TextBoxEx>("TextBox_BinFileName");
+            Button_SelectBinFile = this.FindControl<Button>("Button_SelectBinFile");
+            CheckBox_AllModules = this.FindControl<CheckBox>("CheckBox_AllModules");
+            CheckBox_OnlyLEA = this.FindControl<CheckBox>("CheckBox_OnlyLEA");
+            TextBox_LogScan = this.FindControl<TextBoxEx>("TextBox_LogScan");
+            TextBox_Signature = this.FindControl<TextBoxEx>("TextBox_Signature");
+            TextBox_Offset1 = this.FindControl<TextBoxEx>("TextBox_Offset1");
+            Button_SelectProcess = this.FindControl<Button>("Button_SelectProcess");
+            Button_SaveDump = this.FindControl<Button>("Button_SaveDump");
+            Button_StartScan = this.FindControl<Button>("Button_StartScan");
+            Button_ExportResults = this.FindControl<Button>("Button_ExportResults");
+            Button_SignatureScan = this.FindControl<Button>("Button_SignatureScan");
+            TabControl_Signatures = this.FindControl<TabControl>("TabControl_Signatures");
+            ComboBox_SpecificModule = this.FindControl<ComboBox>("ComboBox_SpecificModule");
+            ComboBox_ScanSpecificModule = this.FindControl<ComboBox>("ComboBox_ScanSpecificModule");
+
+            Button_SelectProcess.Click += Button_SelectProcess_Click;
+            Button_SaveDump.Click += Button_SaveDump_Click;
+            Button_ExportResults.Click += Button_ExportResults_Click;
+            Button_StartScan.Click += Button_StartScan_Click;
+            Button_SignatureScan.Click += Button_SignatureScan_Click;
+            Button_SelectBinFile.Click += Button_SelectBinFile_Click;
+
+            TextBox_ProcessName.PropertyChanged += (_, e) =>
+            {
+                if (e.Property.Name == nameof(TextBox.Text))
+                    TextBox_ProcessName_TextChanged();
+            };
+            TextBox_BinFileName.PropertyChanged += (_, e) =>
+            {
+                if (e.Property.Name == nameof(TextBox.Text))
+                    TextBox_BinFileName_TextChanged();
+            };
         }
 
-        private void Button_SelectProcess_Click(object sender, RoutedEventArgs e)
+        private async void Button_SelectProcess_Click(object sender, RoutedEventArgs e)
         {
+            var window = (Window)this.VisualRoot;
             ProcessSelection processSelection = new ProcessSelection();
-            Nullable<bool> dialogResult = processSelection.ShowDialog();
-            if (dialogResult == true)
+            var dialogResult = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync<bool>(() => processSelection.ShowDialog<bool>(window));
+            if (dialogResult != true)
+                return;
+            if (processSelection.SelectedProcess != null)
             {
-                if (processSelection.SelectedProcess != null)
+                TargetProcess = processSelection.SelectedProcess;
+                TargetProcessHandle = Helper.OpenProcess(TargetProcess.Id);
+                TextBox_ProcessName.Text = processSelection.SelectedProcess.ProcessName;
+                DataGrid_RIP.DataContext = null;
+                TextBox_Log.Clear();
+
+                TextBox_Stack.Clear();
+                List<ProcessModule> modules = new List<ProcessModule>();
+                var mainModule = TargetProcess.MainModule;
+                foreach (ProcessModule m in TargetProcess.Modules)
                 {
-                    TargetProcess = processSelection.SelectedProcess;
-                    TargetProcessHandle = Helper.OpenProcess((int)Helper.ProcessAccessFlags.PROCESS_VM_READ, false, TargetProcess.Id);
-                    TextBox_ProcessName.Text = processSelection.SelectedProcess.ProcessName;
-                    DataGrid_RIP.ItemsSource = null;
-                    TextBox_Log.Clear();
-
-                    TextBox_Stack.Clear();
-                    List<ProcessModule> modules = new List<ProcessModule>();
-                    var mainModule = TargetProcess.MainModule;
-                    foreach (ProcessModule m in TargetProcess.Modules)
-                    {
-                        modules.Add(m);
-                    }
-
-                    modules.Sort((a, b) => {
-                        if (a.ModuleName == mainModule.ModuleName) return -1;
-                        if (b.ModuleName == mainModule.ModuleName) return 1;
-                        return (int)(a.BaseAddress.ToInt64() - b.BaseAddress.ToInt64()); 
-                    });
-
-                    foreach (ProcessModule m in modules)
-                    {
-                        int moduleMemorySize = m.ModuleMemorySize;
-                        IntPtr startAddres = m.BaseAddress;
-                        IntPtr endAddres = new IntPtr(m.BaseAddress.ToInt64() + moduleMemorySize);
-
-                        TextBox_Stack.AppendText($"Module Name: {m.ModuleName}" + "\r\n");
-                        TextBox_Stack.AppendText($"File Name: {m.FileName}" + "\r\n");
-                        TextBox_Stack.AppendText($"Module Size: {moduleMemorySize.ToString("#,0")} Byte" + "\r\n");
-                        TextBox_Stack.AppendText($"Start Address: {startAddres.ToInt64().ToString("X2")} ({startAddres.ToInt64()})" + "\r\n");
-                        TextBox_Stack.AppendText($"End Address  : {endAddres.ToInt64().ToString("X2")} ({endAddres.ToInt64()})" + "\r\n");
-                        TextBox_Stack.AppendText($"---------------------------------------------------------------" + "\r\n");
-                    }
-
+                    modules.Add(m);
                 }
+
+                modules.Sort((a, b) =>
+                {
+                    if (a.ModuleName == mainModule.ModuleName) return -1;
+                    if (b.ModuleName == mainModule.ModuleName) return 1;
+                    return (int)(a.BaseAddress.ToInt64() - b.BaseAddress.ToInt64());
+                });
+
+                ComboBox_SpecificModule.Items = modules;
+                ComboBox_ScanSpecificModule.Items = modules;
+                foreach (ProcessModule m in modules)
+                {
+                    int moduleMemorySize = m.ModuleMemorySize;
+                    IntPtr startAddres = m.BaseAddress;
+                    IntPtr endAddres = new IntPtr(m.BaseAddress.ToInt64() + moduleMemorySize);
+
+                    TextBox_Stack.AppendText($"Module Name: {m.ModuleName}" + Environment.NewLine);
+                    TextBox_Stack.AppendText($"File Name: {m.FileName}" + Environment.NewLine);
+                    TextBox_Stack.AppendText($"Module Size: {moduleMemorySize.ToString("#,0")} Byte" + Environment.NewLine);
+                    TextBox_Stack.AppendText($"Start Address: {startAddres.ToInt64().ToString("X2")} ({startAddres.ToInt64()})" + Environment.NewLine);
+                    TextBox_Stack.AppendText($"End Address  : {endAddres.ToInt64().ToString("X2")} ({endAddres.ToInt64()})" + Environment.NewLine);
+                    TextBox_Stack.AppendText($"---------------------------------------------------------------" + Environment.NewLine);
+                }
+
             }
         }
 
 
         private async void Button_StartScan_Click(object sender, RoutedEventArgs e)
         {
-            DataGrid_RIP.ItemsSource = null;
+            DataGrid_RIP.DataContext = null;
             entries = new List<RIPEntry>();
             TextBox_Log.Clear();
             GC.Collect();
 
             if (string.IsNullOrWhiteSpace(TextBox_FilterString.Text))
             {
-                var result = MessageBox.Show("Requires huge memories to run without filter.\n If results are more than 1M, snip them.\n Procced?", "Caution", MessageBoxButton.OKCancel);
+                var result = await MessageBox.Show("Requires huge memories to run without filter.\n If results are more than 1M, snip them.\n Procced?", "Caution", MessageBoxButton.OKCancel);
                 if (result != MessageBoxResult.OK)
                 {
                     return;
@@ -102,7 +173,7 @@ namespace RIPFinder
                 List<string> filters = ParseFilter();
                 foreach (var f in filters)
                 {
-                    TextBox_Log.AppendText($"filter: {f}" + "\r\n");
+                    TextBox_Log.AppendText($"filter: {f}" + Environment.NewLine);
                 }
 
                 bool searchFromAllModules = CheckBox_AllModules.IsChecked ?? false;
@@ -120,7 +191,10 @@ namespace RIPFinder
                 }
                 else
                 {
-                    ProcessModules.Add(TargetProcess.MainModule);
+                    if (ComboBox_SpecificModule.SelectedItem != null)
+                        ProcessModules.Add((ProcessModule)ComboBox_SpecificModule.SelectedItem);
+                    else
+                        ProcessModules.Add(TargetProcess.MainModule);
                 }
 
 
@@ -134,13 +208,13 @@ namespace RIPFinder
 
                         this.Dispatcher.Invoke((Action)(() =>
                         {
-                            TextBox_Log.AppendText($"----------------------------------------------------" + "\r\n");
+                            TextBox_Log.AppendText($"----------------------------------------------------" + Environment.NewLine);
 
-                            TextBox_Log.AppendText($"Module Name: {m.ModuleName}" + "\r\n");
-                            TextBox_Log.AppendText($"File Name: {m.FileName}" + "\r\n");
-                            TextBox_Log.AppendText($"Module Size: {moduleMemorySize.ToString("#,0")} Byte" + "\r\n");
-                            TextBox_Log.AppendText($"Start Address: {startAddres.ToInt64().ToString("X2")} ({startAddres.ToInt64()})" + "\r\n");
-                            TextBox_Log.AppendText($"End Address  : {endAddres.ToInt64().ToString("X2")} ({endAddres.ToInt64()})" + "\r\n");
+                            TextBox_Log.AppendText($"Module Name: {m.ModuleName}" + Environment.NewLine);
+                            TextBox_Log.AppendText($"File Name: {m.FileName}" + Environment.NewLine);
+                            TextBox_Log.AppendText($"Module Size: {moduleMemorySize.ToString("#,0")} Byte" + Environment.NewLine);
+                            TextBox_Log.AppendText($"Start Address: {startAddres.ToInt64().ToString("X2")} ({startAddres.ToInt64()})" + Environment.NewLine);
+                            TextBox_Log.AppendText($"End Address  : {endAddres.ToInt64().ToString("X2")} ({endAddres.ToInt64()})" + Environment.NewLine);
                             TextBox_Log.AppendText($"Scan started. Please wait..." + "  ");
 
                         }));
@@ -231,16 +305,16 @@ namespace RIPFinder
 
                         this.Dispatcher.Invoke((Action)(() =>
                         {
-                            TextBox_Log.AppendText($"Complete." + "\r\n");
-                            TextBox_Log.AppendText($"Result Count: {entries.Count.ToString("#,0")}" + "\r\n");
-                            TextBox_Log.AppendText($"Scan Time: {stopwatch.ElapsedMilliseconds}ms" + "\r\n");
+                            TextBox_Log.AppendText($"Complete." + Environment.NewLine);
+                            TextBox_Log.AppendText($"Result Count: {entries.Count.ToString("#,0")}" + Environment.NewLine);
+                            TextBox_Log.AppendText($"Scan Time: {stopwatch.ElapsedMilliseconds}ms" + Environment.NewLine);
                         }));
                     }
 
                 });
 
                 await task;
-                DataGrid_RIP.ItemsSource = entries;
+                DataGrid_RIP.Items = entries;
                 SetUIEnabled(true);
             }
             else if (this.RadioButton_Group1_File.IsChecked == true)
@@ -253,7 +327,7 @@ namespace RIPFinder
                 List<string> filters = ParseFilter();
                 foreach (var f in filters)
                 {
-                    TextBox_Log.AppendText($"filter: {f}" + "\r\n");
+                    TextBox_Log.AppendText($"filter: {f}" + Environment.NewLine);
                 }
 
 
@@ -271,9 +345,9 @@ namespace RIPFinder
 
                     this.Dispatcher.Invoke((Action)(() =>
                     {
-                        TextBox_Log.AppendText($"----------------------------------------------------" + "\r\n");
-                        TextBox_Log.AppendText($"File Name: {BinFileName}" + "\r\n");
-                        TextBox_Log.AppendText($"Module Size: {endPosition.ToString("#,0")} Byte" + "\r\n");
+                        TextBox_Log.AppendText($"----------------------------------------------------" + Environment.NewLine);
+                        TextBox_Log.AppendText($"File Name: {BinFileName}" + Environment.NewLine);
+                        TextBox_Log.AppendText($"Module Size: {endPosition.ToString("#,0")} Byte" + Environment.NewLine);
                         TextBox_Log.AppendText($"Scan started. Please wait..." + "  ");
                     }));
 
@@ -351,16 +425,16 @@ namespace RIPFinder
 
                     this.Dispatcher.Invoke((Action)(() =>
                     {
-                        TextBox_Log.AppendText($"Complete." + "\r\n");
-                        TextBox_Log.AppendText($"Result Count: {entries.Count.ToString("#,0")}" + "\r\n");
-                        TextBox_Log.AppendText($"Scan Time: {stopwatch.ElapsedMilliseconds}ms" + "\r\n");
+                        TextBox_Log.AppendText($"Complete." + Environment.NewLine);
+                        TextBox_Log.AppendText($"Result Count: {entries.Count.ToString("#,0")}" + Environment.NewLine);
+                        TextBox_Log.AppendText($"Scan Time: {stopwatch.ElapsedMilliseconds}ms" + Environment.NewLine);
                     }));
 
 
                 });
 
                 await task;
-                DataGrid_RIP.ItemsSource = entries;
+                DataGrid_RIP.DataContext = entries;
 
                 SetUIEnabled(true);
 
@@ -375,7 +449,7 @@ namespace RIPFinder
             List<string> filters = new List<string>();
             if (!string.IsNullOrWhiteSpace(TextBox_FilterString.Text))
             {
-                var filterStrings = TextBox_FilterString.Text.Replace("\r\n",",").Replace("\n", ",").Replace("\r", ",").Split(',');
+                var filterStrings = TextBox_FilterString.Text.Replace(Environment.NewLine, ",").Replace("\n", ",").Replace("\r", ",").Split(',');
                 foreach (var filterString in filterStrings)
                 {
                     var str = filterString.Trim();
@@ -466,14 +540,24 @@ namespace RIPFinder
         }
 
 
-        private void Button_SelectBinFile_Click(object sender, RoutedEventArgs e)
+        private async void Button_SelectBinFile_Click(object sender, RoutedEventArgs e)
         {
-            var dialog = new OpenFileDialog();
-            dialog.Filter = "binary file (*.bin)|*.bin|all files (*.*)|*.*";
-            if (dialog.ShowDialog() == true)
+            var window = (Window)this.VisualRoot;
+            var dialog = new OpenFileDialog
             {
-                this.BinFileName = dialog.FileName;
-                this.TextBox_BinFileName.Text = System.IO.Path.GetFileName(dialog.FileName);
+                AllowMultiple = false,
+                Filters = new List<FileDialogFilter>{
+                    new FileDialogFilter { Name = "binary file (*.bin)", Extensions = new List<string> { "bin" }},
+                    new FileDialogFilter { Name = "all files (*.*)", Extensions = new List<string> { "*" }},
+                },
+                Title = "Select Bin File"
+            };
+
+            var files = await dialog.ShowAsync(window);
+            if (files != null && files.Any())
+            {
+                this.BinFileName = files.First();
+                this.TextBox_BinFileName.Text = System.IO.Path.GetFileName(BinFileName);
             }
         }
 
@@ -482,63 +566,71 @@ namespace RIPFinder
         {
             if (TargetProcess == null) { return; }
 
-            var dialog = new SaveFileDialog();
-            dialog.Filter = "binary file (*.bin)|*.bin|all files (*.*)|*.*";
-            if (dialog.ShowDialog() == true)
+            var window = (Window)this.VisualRoot;
+            var dialog = new SaveFileDialog
             {
-                SetUIEnabled(false);
+                Filters = new List<FileDialogFilter>{
+                    new FileDialogFilter { Name = "binary file (*.bin)", Extensions = new List<string> { "bin" }},
+                    new FileDialogFilter { Name = "all files (*.*)", Extensions = new List<string> { "*" }},
+                }
+            };
 
-                var task = Task.Run(() =>
+            var file = await dialog.ShowAsync(window);
+
+            if (string.IsNullOrEmpty(file))
+                return;
+            SetUIEnabled(false);
+
+            var task = Task.Run(() =>
+            {
+
+                var binFile = file;
+                System.IO.FileStream binFs = new System.IO.FileStream(binFile, System.IO.FileMode.Create, System.IO.FileAccess.Write);
+                System.IO.StreamWriter txt128Sr = new System.IO.StreamWriter(binFile + ".128.txt", false, System.Text.Encoding.ASCII);
+
+                int moduleMemorySize = TargetProcess.MainModule.ModuleMemorySize;
+                IntPtr startAddres = TargetProcess.MainModule.BaseAddress;
+                IntPtr endAddres = new IntPtr(TargetProcess.MainModule.BaseAddress.ToInt64() + moduleMemorySize);
+
+                IntPtr currentAddress = startAddres;
+                int bufferSize = 1 * 1024 * 1024;
+                byte[] buffer = new byte[bufferSize];
+
+
+                while (currentAddress.ToInt64() < endAddres.ToInt64())
                 {
+                    // size
+                    IntPtr nSize = new IntPtr(bufferSize);
 
-                    var binFile = dialog.FileName;
-                    System.IO.FileStream binFs = new System.IO.FileStream(binFile, System.IO.FileMode.Create, System.IO.FileAccess.Write);
-                    System.IO.StreamWriter txt128Sr = new System.IO.StreamWriter(binFile + ".128.txt", false, System.Text.Encoding.ASCII);
-
-                    int moduleMemorySize = TargetProcess.MainModule.ModuleMemorySize;
-                    IntPtr startAddres = TargetProcess.MainModule.BaseAddress;
-                    IntPtr endAddres = new IntPtr(TargetProcess.MainModule.BaseAddress.ToInt64() + moduleMemorySize);
-
-                    IntPtr currentAddress = startAddres;
-                    int bufferSize = 1 * 1024 * 1024;
-                    byte[] buffer = new byte[bufferSize];
-
-
-                    while (currentAddress.ToInt64() < endAddres.ToInt64())
+                    // if remaining memory size is less than splitSize, change nSize to remaining size
+                    if (IntPtr.Add(currentAddress, bufferSize).ToInt64() > endAddres.ToInt64())
                     {
-                        // size
-                        IntPtr nSize = new IntPtr(bufferSize);
-
-                        // if remaining memory size is less than splitSize, change nSize to remaining size
-                        if (IntPtr.Add(currentAddress, bufferSize).ToInt64() > endAddres.ToInt64())
-                        {
-                            nSize = (IntPtr)(endAddres.ToInt64() - currentAddress.ToInt64());
-                        }
-
-                        IntPtr numberOfBytesRead = IntPtr.Zero;
-                        if (Helper.ReadProcessMemory(TargetProcessHandle, currentAddress, buffer, nSize, ref numberOfBytesRead))
-                        {
-                            binFs.Write(buffer, 0, numberOfBytesRead.ToInt32());
-
-                            byte[] b = new byte[numberOfBytesRead.ToInt32()];
-                            Array.Copy(buffer, 0, b, 0, numberOfBytesRead.ToInt32());
-                            var t = System.Text.RegularExpressions.Regex.Replace(BitConverter.ToString(b).Replace("-", ""), @"(?<=\G.{128})(?!$)", Environment.NewLine);
-                            txt128Sr.Write(t);
-
-
-                        }
-
-                        currentAddress = new IntPtr(currentAddress.ToInt64() + numberOfBytesRead.ToInt64());
+                        nSize = (IntPtr)(endAddres.ToInt64() - currentAddress.ToInt64());
                     }
-                    binFs.Close();
-                    txt128Sr.Close();
-                });
 
-                await task;
-                MessageBox.Show("Complete.");
+                    IntPtr numberOfBytesRead = IntPtr.Zero;
+                    if (Helper.ReadProcessMemory(TargetProcessHandle, currentAddress, buffer, nSize, ref numberOfBytesRead))
+                    {
+                        binFs.Write(buffer, 0, numberOfBytesRead.ToInt32());
 
-                SetUIEnabled(true);
-            }
+                        byte[] b = new byte[numberOfBytesRead.ToInt32()];
+                        Array.Copy(buffer, 0, b, 0, numberOfBytesRead.ToInt32());
+                        var t = System.Text.RegularExpressions.Regex.Replace(BitConverter.ToString(b).Replace("-", ""), @"(?<=\G.{128})(?!$)", Environment.NewLine);
+                        txt128Sr.Write(t);
+
+
+                    }
+
+                    currentAddress = new IntPtr(currentAddress.ToInt64() + numberOfBytesRead.ToInt64());
+                }
+                binFs.Close();
+                txt128Sr.Close();
+            });
+
+            await task;
+            MessageBox.Show("Complete.");
+
+            SetUIEnabled(true);
         }
 
         private async void Button_ExportResults_Click(object sender, RoutedEventArgs e)
@@ -546,36 +638,44 @@ namespace RIPFinder
             if (this.DataGrid_RIP == null) { return; }
             if (this.DataGrid_RIP.Items == null) { return; }
 
-            var dialog = new SaveFileDialog();
-            dialog.Filter = "txt file (*.txt)|*.txt|all files (*.*)|*.*";
-            if (dialog.ShowDialog() == true)
+            var window = (Window)this.VisualRoot;
+            var dialog = new SaveFileDialog
             {
-                SetUIEnabled(false);
+                Filters = new List<FileDialogFilter>{
+                    new FileDialogFilter { Name = "binary file (*.bin)", Extensions = new List<string> { "bin" }},
+                    new FileDialogFilter { Name = "all files (*.*)", Extensions = new List<string> { "*" }},
+                }
+            };
 
-                var task = Task.Run(() =>
+            var file = await dialog.ShowAsync(window);
+
+            if (string.IsNullOrEmpty(file))
+                return;
+
+            SetUIEnabled(false);
+
+            var task = Task.Run(() =>
+            {
+                System.IO.StreamWriter sr = new System.IO.StreamWriter(file, false, System.Text.Encoding.ASCII);
+
+                foreach (var item in this.DataGrid_RIP.Items)
                 {
-                    var file = dialog.FileName;
-                    System.IO.StreamWriter sr = new System.IO.StreamWriter(file, false, System.Text.Encoding.ASCII);
+                    RIPEntry entry = item as RIPEntry;
+                    string csv = "";
+                    csv += String.Format("{0, -30}", entry.AddressRelativeString) + " ";
+                    csv += String.Format("{0, -16}", entry.AddressString) + " ";
+                    csv += String.Format("{0, -30}", entry.TargetAddressRelativeString) + " ";
+                    csv += String.Format("{0, -16}", entry.TargetAddressString) + " ";
+                    csv += String.Format("{0, -64}", entry.Signature) + Environment.NewLine;
+                    sr.Write(csv);
+                }
 
-                    foreach (var item in this.DataGrid_RIP.Items)
-                    {
-                        RIPEntry entry = item as RIPEntry;
-                        string csv = "";
-                        csv += String.Format("{0, -30}", entry.AddressRelativeString) + " ";
-                        csv += String.Format("{0, -16}", entry.AddressString) + " ";
-                        csv += String.Format("{0, -30}", entry.TargetAddressRelativeString) + " ";
-                        csv += String.Format("{0, -16}", entry.TargetAddressString) + " ";
-                        csv += String.Format("{0, -64}", entry.Signature) + Environment.NewLine;
-                        sr.Write(csv);
-                    }
+                sr.Close();
+            });
 
-                    sr.Close();
-                });
-
-                await task;
-                MessageBox.Show("Complete.");
-                SetUIEnabled(true);
-            }
+            await task;
+            MessageBox.Show("Complete.");
+            SetUIEnabled(true);
         }
 
         private async void Button_SignatureScan_Click(object sender, RoutedEventArgs e)
@@ -595,17 +695,21 @@ namespace RIPFinder
                 }
 
                 var module = TargetProcess.MainModule;
-                var baseAddress = TargetProcess.MainModule.BaseAddress;
-                var endAddress = new IntPtr(TargetProcess.MainModule.BaseAddress.ToInt64() + TargetProcess.MainModule.ModuleMemorySize);
+
+                if (ComboBox_ScanSpecificModule.SelectedItem != null)
+                    module = (ProcessModule)ComboBox_ScanSpecificModule.SelectedItem;
+
+                var baseAddress = module.BaseAddress;
+                var endAddress = new IntPtr(module.BaseAddress.ToInt64() + module.ModuleMemorySize);
 
                 Memory memory = new Memory(TargetProcess);
                 var pointers = memory.SigScan(TextBox_Signature.Text.Replace('*', '?'), offset1, true);
 
 
-                TextBox_LogScan.Text += "FileName= " + TargetProcess.MainModule.FileName + Environment.NewLine;
-                TextBox_LogScan.Text += "MainModule= " + TargetProcess.MainModule.ModuleName + Environment.NewLine;
+                TextBox_LogScan.Text += "FileName= " + module.FileName + Environment.NewLine;
+                TextBox_LogScan.Text += "MainModule= " + module.ModuleName + Environment.NewLine;
                 TextBox_LogScan.Text += "BaseAddress= " + ((baseAddress.ToInt64().ToString("X").Length % 2 == 1) ? "0" + baseAddress.ToInt64().ToString("X") : baseAddress.ToInt64().ToString("X")) + Environment.NewLine;
-                TextBox_LogScan.Text += "ModuleMemorySize= " + TargetProcess.MainModule.ModuleMemorySize.ToString() + Environment.NewLine;
+                TextBox_LogScan.Text += "ModuleMemorySize= " + module.ModuleMemorySize.ToString() + Environment.NewLine;
 
                 TextBox_LogScan.Text += "Signature= " + TextBox_Signature.Text + Environment.NewLine;
                 TextBox_LogScan.Text += "Offset= " + TextBox_Signature.Text + Environment.NewLine;
@@ -619,14 +723,14 @@ namespace RIPFinder
                     foreach (var p in pointers)
                     {
                         var r0 = p[0].ToInt64() - baseAddress.ToInt64();
-                        pString += "ptr: \"" + TargetProcess.MainModule.ModuleName + "\"+" +
+                        pString += "ptr: \"" + module.ModuleName + "\"+" +
                             ((r0.ToString("X").Length % 2 == 1) ? "0" + r0.ToString("X") : r0.ToString("X")) + " (" +
                             ((p[0].ToInt64().ToString("X").Length % 2 == 1) ? "0" + p[0].ToInt64().ToString("X") : p[0].ToInt64().ToString("X")) + ")";
 
                         if (p[1].ToInt64() >= baseAddress.ToInt64() && p[1].ToInt64() <= endAddress.ToInt64())
                         {
                             var r1 = p[1].ToInt64() - baseAddress.ToInt64();
-                            pString += " -> \"" + TargetProcess.MainModule.ModuleName + "\"+" +
+                            pString += " -> \"" + module.ModuleName + "\"+" +
                                 ((r1.ToString("X").Length % 2 == 1) ? "0" + r1.ToString("X") : r1.ToString("X")) + " (" +
                                 ((p[1].ToInt64().ToString("X").Length % 2 == 1) ? "0" + p[1].ToInt64().ToString("X") : p[1].ToInt64().ToString("X")) + ")" + Environment.NewLine;
                         }
@@ -714,6 +818,8 @@ namespace RIPFinder
             Button_StartScan.IsEnabled = isEnabled;
             TextBox_FilterString.IsEnabled = isEnabled;
             CheckBox_AllModules.IsEnabled = isEnabled;
+            ComboBox_SpecificModule.IsEnabled = isEnabled;
+            ComboBox_ScanSpecificModule.IsEnabled = isEnabled;
             Button_ExportResults.IsEnabled = isEnabled;
             TextBox_Signature.IsEnabled = isEnabled;
             TextBox_Offset1.IsEnabled = isEnabled;
@@ -757,10 +863,9 @@ namespace RIPFinder
 
         }
 
-        private void TextBox_ProcessName_TextChanged(object sender, TextChangedEventArgs e)
+        private void TextBox_ProcessName_TextChanged()
         {
-            var textbox = (TextBox)sender;
-            if (string.IsNullOrWhiteSpace(textbox.Text))
+            if (string.IsNullOrWhiteSpace(TextBox_ProcessName.Text))
             {
                 TabControl_Signatures.IsEnabled = false;
                 Button_SaveDump.IsEnabled = false;
@@ -772,10 +877,9 @@ namespace RIPFinder
             }
         }
 
-        private void TextBox_BinFileName_TextChanged(object sender, TextChangedEventArgs e)
+        private void TextBox_BinFileName_TextChanged()
         {
-            var textbox = (TextBox)sender;
-            if (string.IsNullOrWhiteSpace(textbox.Text))
+            if (string.IsNullOrWhiteSpace(TextBox_BinFileName.Text))
             {
                 TabControl_Signatures.IsEnabled = false;
             }
@@ -785,6 +889,10 @@ namespace RIPFinder
             }
         }
 
+        private void InitializeComponent()
+        {
+            AvaloniaXamlLoader.Load(this);
+        }
     }
 
     public class Module
